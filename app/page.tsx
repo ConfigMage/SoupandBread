@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react';
 type AppState = 'loading' | 'unopened' | 'opening' | 'playing' | 'destroying' | 'destroyed';
 
 // Script lines to display (excluding stage directions)
+// Empty text entries act as line breaks/pauses
 const scriptLines = [
   { text: 'Good evening.', delay: 0 },
   { text: '', delay: 1500 },
@@ -49,10 +50,37 @@ function Envelope({ isOpening, onClick }: { isOpening: boolean; onClick: () => v
   );
 }
 
-function MessageDisplay({ text }: { text: string }) {
+interface MessageDisplayProps {
+  completedLines: string[];
+  currentLine: string;
+  isTyping: boolean;
+}
+
+function MessageDisplay({ completedLines, currentLine, isTyping }: MessageDisplayProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when new content appears
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    }
+  }, [completedLines, currentLine]);
+
   return (
-    <div className="message-container">
-      <p>{text}<span className="cursor" /></p>
+    <div className="message-container" ref={containerRef}>
+      {/* Completed lines */}
+      {completedLines.map((line, index) => (
+        <p key={index} className={line === '' ? 'h-4' : ''}>
+          {line}
+        </p>
+      ))}
+      {/* Current line being typed */}
+      {currentLine !== null && (
+        <p>
+          {currentLine}
+          {isTyping && <span className="cursor" />}
+        </p>
+      )}
     </div>
   );
 }
@@ -75,7 +103,8 @@ function FakePage404() {
 
 export default function Home() {
   const [appState, setAppState] = useState<AppState>('loading');
-  const [displayedText, setDisplayedText] = useState('');
+  const [completedLines, setCompletedLines] = useState<string[]>([]);
+  const [currentLineText, setCurrentLineText] = useState('');
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [currentCharIndex, setCurrentCharIndex] = useState(0);
   const [showFlash, setShowFlash] = useState(false);
@@ -137,23 +166,29 @@ export default function Home() {
     }, 500);
   };
 
-  // Typewriter effect for text
+  // Typewriter effect for text - rolling credits style
   useEffect(() => {
     if (appState !== 'playing') return;
 
     const currentLine = scriptLines[currentLineIndex];
     if (!currentLine) return;
 
-    // Empty lines are just pauses
+    // Empty lines create a blank line break
     if (currentLine.text === '') {
-      if (currentLineIndex < scriptLines.length - 1) {
-        const nextLine = scriptLines[currentLineIndex + 1];
-        const delay = nextLine.delay - currentLine.delay;
-        const timer = setTimeout(() => {
-          setCurrentLineIndex(prev => prev + 1);
-          setCurrentCharIndex(0);
-        }, delay);
-        return () => clearTimeout(timer);
+      // Add empty line to completed lines
+      if (currentCharIndex === 0) {
+        setCompletedLines(prev => [...prev, '']);
+        setCurrentLineText('');
+
+        if (currentLineIndex < scriptLines.length - 1) {
+          const nextLine = scriptLines[currentLineIndex + 1];
+          const delay = nextLine.delay - currentLine.delay;
+          const timer = setTimeout(() => {
+            setCurrentLineIndex(prev => prev + 1);
+            setCurrentCharIndex(0);
+          }, delay);
+          return () => clearTimeout(timer);
+        }
       }
       return;
     }
@@ -161,17 +196,19 @@ export default function Home() {
     // Type out characters
     if (currentCharIndex < currentLine.text.length) {
       const timer = setTimeout(() => {
-        setDisplayedText(currentLine.text.slice(0, currentCharIndex + 1));
+        setCurrentLineText(currentLine.text.slice(0, currentCharIndex + 1));
         setCurrentCharIndex(prev => prev + 1);
       }, 50); // Character typing speed
       return () => clearTimeout(timer);
     } else {
-      // Line complete, move to next after delay
+      // Line complete, add to completed lines and move to next
       if (currentLineIndex < scriptLines.length - 1) {
         const nextLine = scriptLines[currentLineIndex + 1];
-        // If next is empty, use its delay, otherwise calculate difference
         const delay = nextLine.text === '' ? 500 : 100;
         const timer = setTimeout(() => {
+          // Move current line to completed
+          setCompletedLines(prev => [...prev, currentLine.text]);
+          setCurrentLineText('');
           setCurrentLineIndex(prev => prev + 1);
           setCurrentCharIndex(0);
         }, delay);
@@ -211,14 +248,22 @@ export default function Home() {
 
       {/* Playing state */}
       {appState === 'playing' && (
-        <MessageDisplay text={displayedText} />
+        <MessageDisplay
+          completedLines={completedLines}
+          currentLine={currentLineText}
+          isTyping={currentCharIndex < (scriptLines[currentLineIndex]?.text.length || 0)}
+        />
       )}
 
       {/* Destroying state - static effect */}
       {appState === 'destroying' && (
         <>
           <StaticEffect />
-          <MessageDisplay text={displayedText} />
+          <MessageDisplay
+            completedLines={completedLines}
+            currentLine={currentLineText}
+            isTyping={false}
+          />
         </>
       )}
     </main>

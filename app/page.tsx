@@ -198,7 +198,7 @@ export default function Home() {
       const timer = setTimeout(() => {
         setCurrentLineText(currentLine.text.slice(0, currentCharIndex + 1));
         setCurrentCharIndex(prev => prev + 1);
-      }, 50); // Character typing speed
+      }, 35); // Character typing speed
       return () => clearTimeout(timer);
     } else {
       // Line complete, add to completed lines and move to next
